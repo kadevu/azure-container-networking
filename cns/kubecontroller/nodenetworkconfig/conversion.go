@@ -132,7 +132,7 @@ func assignIPToDelegatedNIC(nc v1alpha.NetworkContainer) error {
 		errors.Wrapf(err, "failed to assign IP to delegated NIC")
 	}
 
-	ipv6, addrv6, _ := net.ParseCIDR(nc.PrimaryIPv6)
+	ipv6, addrv6, _ := net.ParseCIDR(nc.PrimaryIPV6)
 
 	logger.Printf("[assignIPToDelegatedNIC] ip %s addr %s", ipv6, addrv6)
 
