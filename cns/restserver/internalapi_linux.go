@@ -9,13 +9,27 @@ import (
 	"github.com/Azure/azure-container-networking/cns"
 	"github.com/Azure/azure-container-networking/cns/logger"
 	"github.com/Azure/azure-container-networking/cns/types"
+	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/iptables"
 	"github.com/Azure/azure-container-networking/network/networkutils"
 	goiptables "github.com/coreos/go-iptables/iptables"
 	"github.com/pkg/errors"
+	vishnetlink "github.com/vishvananda/netlink"
 )
 
 const SWIFTPOSTROUTING = "SWIFT-POSTROUTING"
+
+const (
+	// WireserverIP is the IP address of the Azure Wireserver (also used for DNS).
+	WireserverIP = "168.63.129.16"
+
+	// WireserverRouteTable is the routing table used for wireserver traffic (main table = 254).
+	WireserverRouteTable = 254
+
+	// WireserverRulePriority is the priority for the ip rule that routes wireserver traffic.
+	// This ensures wireserver traffic goes through eth0 (infra NIC) even when other rules are added.
+	WireserverRulePriority = 0
+)
 
 type IPtablesProvider struct{}
 
@@ -175,6 +189,105 @@ func (service *HTTPRestService) programSNATRules(req *cns.CreateNetworkContainer
 	}
 
 	return types.Success, ""
+}
+
+// NetlinkIPRuleClient implements IPRuleClient using the vishvananda/netlink package.
+type NetlinkIPRuleClient struct{}
+
+// RuleList lists all ip rules for the given address family.
+func (n *NetlinkIPRuleClient) RuleList(family int) ([]IPRule, error) {
+	rules, err := vishnetlink.RuleList(family)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]IPRule, len(rules))
+	for i, r := range rules {
+		result[i] = IPRule{
+			Dst:      r.Dst,
+			Table:    r.Table,
+			Priority: r.Priority,
+		}
+	}
+	return result, nil
+}
+
+// RuleAdd adds an ip rule.
+func (n *NetlinkIPRuleClient) RuleAdd(rule *IPRule) error {
+	nlRule := vishnetlink.NewRule()
+	nlRule.Dst = rule.Dst
+	nlRule.Table = rule.Table
+	nlRule.Priority = rule.Priority
+	return vishnetlink.RuleAdd(nlRule)
+}
+
+// wireserverIPRules returns ip rules to route wireserver traffic through the main routing table.
+// For VnetBlockDualStackSwiftV2 (Prefix on NIC v6) with Cilium CNI, pod traffic is routed
+// through eth1 (delegated NIC). These rules ensure critical traffic (e.g. wireserver)
+// is routed through eth0 (infra NIC) via the main routing table.
+func wireserverIPRules() ([]IPRule, error) {
+	_, wireserverNet, err := net.ParseCIDR(WireserverIP + "/32")
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to parse wireserver IP %s", WireserverIP)
+	}
+	return []IPRule{
+		{Dst: wireserverNet, Table: WireserverRouteTable, Priority: WireserverRulePriority},
+	}, nil
+}
+
+// AddRules programs ip rules based on the current service configuration.
+// It checks which options are enabled and adds corresponding rules.
+// It is idempotent: rules that already exist are skipped.
+func (service *HTTPRestService) AddRules() error {
+	if service.ipruleclient == nil {
+		logger.Printf("[Azure CNS] IPRuleClient not configured, skipping ip rule programming")
+		return nil
+	}
+
+	var rules []IPRule
+
+	if service.Options[common.OptVnetBlockDualStackSwiftV2] == true {
+		wsRules, err := wireserverIPRules()
+		if err != nil {
+			return err
+		}
+		rules = append(rules, wsRules...)
+	}
+
+	// Add additional option-gated rules here for future scenarios.
+
+	if len(rules) == 0 {
+		return nil
+	}
+
+	existing, err := service.ipruleclient.RuleList(vishnetlink.FAMILY_V4)
+	if err != nil {
+		return errors.Wrap(err, "failed to list existing ip rules")
+	}
+
+	for i := range rules {
+		if err := service.addIPRule(&rules[i], existing); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// addIPRule programs a single ip rule if it does not already exist in the provided set.
+func (service *HTTPRestService) addIPRule(rule *IPRule, existing []IPRule) error {
+	for _, r := range existing {
+		if r.Dst != nil && rule.Dst != nil && r.Dst.String() == rule.Dst.String() &&
+			r.Table == rule.Table && r.Priority == rule.Priority {
+			logger.Printf("[Azure CNS] ip rule already exists: to %s table %d priority %d", rule.Dst, rule.Table, rule.Priority)
+			return nil
+		}
+	}
+
+	if err := service.ipruleclient.RuleAdd(rule); err != nil {
+		return errors.Wrapf(err, "failed to add ip rule to %s table %d priority %d", rule.Dst, rule.Table, rule.Priority)
+	}
+
+	logger.Printf("[Azure CNS] Added ip rule: to %s table %d priority %d", rule.Dst, rule.Table, rule.Priority)
+	return nil
 }
 
 // no-op for linux

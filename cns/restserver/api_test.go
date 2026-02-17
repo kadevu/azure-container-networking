@@ -1664,7 +1664,7 @@ func startService(serviceConfig common.ServiceConfig, _ configuration.CNSConfig)
 
 	nmagentClient := &fakes.NMAgentClientFake{}
 	service, err = NewHTTPRestService(&config, &fakes.WireserverClientFake{}, &fakes.WireserverProxyFake{}, &IPtablesProvider{},
-		nmagentClient, nil, nil, nil, fakes.NewMockIMDSClient())
+		nil, nmagentClient, nil, nil, nil, fakes.NewMockIMDSClient())
 	if err != nil {
 		return err
 	}

@@ -770,7 +770,7 @@ func main() {
 	}
 
 	imdsClient := imds.NewClient()
-	httpRemoteRestService, err := restserver.NewHTTPRestService(&config, wsclient, &wsProxy, &restserver.IPtablesProvider{}, nmaClient,
+	httpRemoteRestService, err := restserver.NewHTTPRestService(&config, wsclient, &wsProxy, &restserver.IPtablesProvider{}, &restserver.NetlinkIPRuleClient{}, nmaClient,
 		endpointStateStore, conflistGenerator, homeAzMonitor, imdsClient)
 	if err != nil {
 		logger.Errorf("Failed to create CNS object, err:%v.\n", err)
@@ -787,6 +787,7 @@ func main() {
 	httpRemoteRestService.SetOption(acn.OptHttpResponseHeaderTimeout, httpResponseHeaderTimeout)
 	httpRemoteRestService.SetOption(acn.OptProgramSNATIPTables, cnsconfig.ProgramSNATIPTables)
 	httpRemoteRestService.SetOption(acn.OptManageEndpointState, cnsconfig.ManageEndpointState)
+	httpRemoteRestService.SetOption(acn.OptVnetBlockDualStackSwiftV2, cnsconfig.VnetBlockDualStackSwiftV2)
 
 	// Create default ext network if commandline option is set
 	if len(strings.TrimSpace(createDefaultExtNetworkType)) > 0 {
@@ -894,6 +895,7 @@ func main() {
 				logger.Errorf("Failed to set VF for accelnet NICs: %v", err)
 			}
 		}
+
 	}
 
 	// AzureHost channelmode indicates Nodesubnet. IPs are to be fetched from NMagent.

@@ -89,6 +89,9 @@ const (
 	// Enable CNS to program SNAT iptables rules
 	OptProgramSNATIPTables = "program-snat-iptables"
 
+	// Enable CNS to program wireserver ip rule for VnetBlockDualStackSwiftV2 scenario
+	OptVnetBlockDualStackSwiftV2 = "vnet-block-dualstack-swiftv2"
+
 	// Enable Telemetry service
 	OptTelemetryService      = "telemetry-service"
 	OptTelemetryServiceAlias = "ts"
