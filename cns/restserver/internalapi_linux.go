@@ -15,6 +15,7 @@ import (
 	goiptables "github.com/coreos/go-iptables/iptables"
 	"github.com/pkg/errors"
 	vishnetlink "github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 const SWIFTPOSTROUTING = "SWIFT-POSTROUTING"
@@ -22,9 +23,6 @@ const SWIFTPOSTROUTING = "SWIFT-POSTROUTING"
 const (
 	// WireserverIP is the IP address of the Azure Wireserver (also used for DNS).
 	WireserverIP = "168.63.129.16"
-
-	// WireserverRouteTable is the routing table used for wireserver traffic (main table = 254).
-	WireserverRouteTable = 254
 
 	// WireserverRulePriority is the priority for the ip rule that routes wireserver traffic.
 	// This ensures wireserver traffic goes through eth0 (infra NIC) even when other rules are added.
@@ -230,7 +228,7 @@ func wireserverIPRules() ([]IPRule, error) {
 		return nil, errors.Wrapf(err, "failed to parse wireserver IP %s", WireserverIP)
 	}
 	return []IPRule{
-		{Dst: wireserverNet, Table: WireserverRouteTable, Priority: WireserverRulePriority},
+		{Dst: wireserverNet, Table: unix.RT_TABLE_MAIN, Priority: WireserverRulePriority},
 	}, nil
 }
 
@@ -252,8 +250,6 @@ func (service *HTTPRestService) AddRules() error {
 		}
 		rules = append(rules, wsRules...)
 	}
-
-	// Add additional option-gated rules here for future scenarios.
 
 	if len(rules) == 0 {
 		return nil

@@ -667,6 +667,7 @@ func (service *HTTPRestService) CreateOrUpdateNetworkContainerInternal(req *cns.
 
 	if err := service.AddRules(); err != nil {
 		logger.Errorf("[Azure CNS] Failed to program ip rules: %v", err)
+		return types.UnexpectedError
 	}
 
 	return returnCode
