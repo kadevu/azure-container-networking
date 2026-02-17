@@ -196,14 +196,14 @@ type NetlinkIPRuleClient struct{}
 func (n *NetlinkIPRuleClient) RuleList(family int) ([]IPRule, error) {
 	rules, err := vishnetlink.RuleList(family)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to list ip rules")
 	}
 	result := make([]IPRule, len(rules))
-	for i, r := range rules {
+	for i := range rules {
 		result[i] = IPRule{
-			Dst:      r.Dst,
-			Table:    r.Table,
-			Priority: r.Priority,
+			Dst:      rules[i].Dst,
+			Table:    rules[i].Table,
+			Priority: rules[i].Priority,
 		}
 	}
 	return result, nil
@@ -215,7 +215,7 @@ func (n *NetlinkIPRuleClient) RuleAdd(rule *IPRule) error {
 	nlRule.Dst = rule.Dst
 	nlRule.Table = rule.Table
 	nlRule.Priority = rule.Priority
-	return vishnetlink.RuleAdd(nlRule)
+	return errors.Wrap(vishnetlink.RuleAdd(nlRule), "failed to add ip rule")
 }
 
 // wireserverIPRules returns ip rules to route wireserver traffic through the main routing table.
@@ -237,6 +237,7 @@ func wireserverIPRules() ([]IPRule, error) {
 // It is idempotent: rules that already exist are skipped.
 func (service *HTTPRestService) AddRules() error {
 	if service.ipruleclient == nil {
+		//nolint:staticcheck // SA1019: suppress deprecated logger.Printf usage. Todo: legacy logger usage is consistent in cns repo. Migrates when all logger usage is migrated
 		logger.Printf("[Azure CNS] IPRuleClient not configured, skipping ip rule programming")
 		return nil
 	}
@@ -273,6 +274,7 @@ func (service *HTTPRestService) addIPRule(rule *IPRule, existing []IPRule) error
 	for _, r := range existing {
 		if r.Dst != nil && rule.Dst != nil && r.Dst.String() == rule.Dst.String() &&
 			r.Table == rule.Table && r.Priority == rule.Priority {
+			//nolint:staticcheck // SA1019: suppress deprecated logger.Printf usage. Todo: legacy logger usage is consistent in cns repo. Migrates when all logger usage is migrated
 			logger.Printf("[Azure CNS] ip rule already exists: to %s table %d priority %d", rule.Dst, rule.Table, rule.Priority)
 			return nil
 		}
@@ -282,6 +284,7 @@ func (service *HTTPRestService) addIPRule(rule *IPRule, existing []IPRule) error
 		return errors.Wrapf(err, "failed to add ip rule to %s table %d priority %d", rule.Dst, rule.Table, rule.Priority)
 	}
 
+	//nolint:staticcheck // SA1019: suppress deprecated logger.Printf usage. Todo: legacy logger usage is consistent in cns repo. Migrates when all logger usage is migrated
 	logger.Printf("[Azure CNS] Added ip rule: to %s table %d priority %d", rule.Dst, rule.Table, rule.Priority)
 	return nil
 }

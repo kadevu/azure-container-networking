@@ -4,10 +4,14 @@
 package restserver
 
 import (
-	"errors"
 	"net"
 	"strconv"
 	"testing"
+
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sys/unix"
 
 	"github.com/Azure/azure-container-networking/cns"
 	"github.com/Azure/azure-container-networking/cns/fakes"
@@ -15,9 +19,6 @@ import (
 	"github.com/Azure/azure-container-networking/common"
 	"github.com/Azure/azure-container-networking/iptables"
 	"github.com/Azure/azure-container-networking/network/networkutils"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/sys/unix"
 )
 
 type FakeIPTablesProvider struct {
@@ -420,39 +421,44 @@ func TestWireserverIPRules(t *testing.T) {
 	assert.Equal(t, WireserverRulePriority, rule.Priority)
 }
 
+var (
+	errMockRuleList = errors.New("mock rule list error")
+	errMockRuleAdd  = errors.New("mock rule add error")
+)
+
 func TestAddRules(t *testing.T) {
 	wireserverCIDR := WireserverIP + "/32"
 	_, wireserverNet, _ := net.ParseCIDR(wireserverCIDR)
 
 	tests := []struct {
-		name           string
-		ipruleclient   IPRuleClient
-		optEnabled     bool
-		expectedErr    string
-		expectedAdded  int
-		setupMock      func(*ipRuleClientMock)
+		name          string
+		ipruleclient  IPRuleClient
+		optEnabled    bool
+		expectedErr   string
+		expectedAdded int
+		setupMock     func(*ipRuleClientMock)
 	}{
 		{
-			name:         "no-op when ipruleclient is nil",
-			ipruleclient: nil,
-			optEnabled:   true,
+			name:          "no-op when ipruleclient is nil",
+			ipruleclient:  nil,
+			optEnabled:    true,
 			expectedAdded: 0,
 		},
 		{
-			name:         "no-op when option is disabled",
-			optEnabled:   false,
+			name:          "no-op when option is disabled",
+			optEnabled:    false,
 			expectedAdded: 0,
-			setupMock:    func(_ *ipRuleClientMock) {},
+			setupMock:     func(_ *ipRuleClientMock) {},
 		},
 		{
-			name:         "adds wireserver rule when option enabled and rule does not exist",
-			optEnabled:   true,
+			name:          "adds wireserver rule when option enabled and rule does not exist",
+			optEnabled:    true,
 			expectedAdded: 1,
-			setupMock:    func(_ *ipRuleClientMock) {},
+			setupMock:     func(_ *ipRuleClientMock) {},
 		},
 		{
-			name:       "skips wireserver rule when it already exists (idempotency)",
-			optEnabled: true,
+			name:          "skips wireserver rule when it already exists (idempotency)",
+			optEnabled:    true,
 			expectedAdded: 0,
 			setupMock: func(m *ipRuleClientMock) {
 				m.rules = []IPRule{
@@ -465,7 +471,7 @@ func TestAddRules(t *testing.T) {
 			optEnabled:  true,
 			expectedErr: "failed to list existing ip rules",
 			setupMock: func(m *ipRuleClientMock) {
-				m.ruleListErr = errors.New("netlink error")
+				m.ruleListErr = errMockRuleList
 			},
 		},
 		{
@@ -473,27 +479,27 @@ func TestAddRules(t *testing.T) {
 			optEnabled:  true,
 			expectedErr: "failed to add ip rule",
 			setupMock: func(m *ipRuleClientMock) {
-				m.ruleAddErr = errors.New("permission denied")
+				m.ruleAddErr = errMockRuleAdd
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := getTestService(cns.KubernetesCRD)
+			testSvc := getTestService(cns.KubernetesCRD)
 
 			if tt.ipruleclient != nil || tt.setupMock != nil {
 				mock := &ipRuleClientMock{}
 				if tt.setupMock != nil {
 					tt.setupMock(mock)
 				}
-				svc.ipruleclient = mock
+				testSvc.ipruleclient = mock
 
 				if tt.optEnabled {
-					svc.SetOption(common.OptVnetBlockDualStackSwiftV2, true)
+					testSvc.SetOption(common.OptVnetBlockDualStackSwiftV2, true)
 				}
 
-				err := svc.AddRules()
+				err := testSvc.AddRules()
 
 				if tt.expectedErr != "" {
 					require.Error(t, err)
@@ -510,11 +516,11 @@ func TestAddRules(t *testing.T) {
 				}
 			} else {
 				// nil ipruleclient case
-				svc.ipruleclient = nil
+				testSvc.ipruleclient = nil
 				if tt.optEnabled {
-					svc.SetOption(common.OptVnetBlockDualStackSwiftV2, true)
+					testSvc.SetOption(common.OptVnetBlockDualStackSwiftV2, true)
 				}
-				err := svc.AddRules()
+				err := testSvc.AddRules()
 				require.NoError(t, err)
 			}
 		})
