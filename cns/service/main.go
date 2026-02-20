@@ -45,6 +45,7 @@ import (
 	"github.com/Azure/azure-container-networking/cns/middlewares"
 	"github.com/Azure/azure-container-networking/cns/multitenantcontroller"
 	"github.com/Azure/azure-container-networking/cns/multitenantcontroller/multitenantoperator"
+	"github.com/Azure/azure-container-networking/cns/nodesetup"
 	"github.com/Azure/azure-container-networking/cns/restserver"
 	restserverv2 "github.com/Azure/azure-container-networking/cns/restserver/v2"
 	cnipodprovider "github.com/Azure/azure-container-networking/cns/stateprovider/cni"
@@ -770,7 +771,7 @@ func main() {
 	}
 
 	imdsClient := imds.NewClient()
-	httpRemoteRestService, err := restserver.NewHTTPRestService(&config, wsclient, &wsProxy, &restserver.IPtablesProvider{}, &restserver.NetlinkIPRuleClient{}, nmaClient,
+	httpRemoteRestService, err := restserver.NewHTTPRestService(&config, wsclient, &wsProxy, &restserver.IPtablesProvider{}, nmaClient,
 		endpointStateStore, conflistGenerator, homeAzMonitor, imdsClient)
 	if err != nil {
 		logger.Errorf("Failed to create CNS object, err:%v.\n", err)
@@ -787,7 +788,6 @@ func main() {
 	httpRemoteRestService.SetOption(acn.OptHttpResponseHeaderTimeout, httpResponseHeaderTimeout)
 	httpRemoteRestService.SetOption(acn.OptProgramSNATIPTables, cnsconfig.ProgramSNATIPTables)
 	httpRemoteRestService.SetOption(acn.OptManageEndpointState, cnsconfig.ManageEndpointState)
-	httpRemoteRestService.SetOption(acn.OptVnetBlockDualStackSwiftV2, cnsconfig.VnetBlockDualStackSwiftV2)
 
 	// Create default ext network if commandline option is set
 	if len(strings.TrimSpace(createDefaultExtNetworkType)) > 0 {
@@ -828,6 +828,16 @@ func main() {
 	if err != nil {
 		logger.Errorf("Failed to set remote ARP MAC address: %v", err)
 		return
+	}
+
+	// Program ip rules to route wireserver traffic through eth0 (infra NIC).
+	// This is a one-time node-level setup for scenarios like Prefix on NIC v6 with Cilium CNI.
+	if cnsconfig.RouteWireserverViaDefaultInterface {
+		if prepErr := nodesetup.Run(cnsconfig.WireserverIP); prepErr != nil {
+			//nolint:staticcheck // SA1019: suppress deprecated logger.Errorf usage. Todo: legacy logger usage is consistent in cns repo. Migrates when all logger usage is migrated
+			logger.Errorf("[Azure CNS] Failed to prepare node: %v", prepErr)
+			return
+		}
 	}
 
 	// We are only setting the PriorityVLANTag in 'cns.Direct' mode, because it neatly maps today, to 'isUsingMultitenancy'

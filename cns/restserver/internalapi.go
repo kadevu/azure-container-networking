@@ -665,12 +665,6 @@ func (service *HTTPRestService) CreateOrUpdateNetworkContainerInternal(req *cns.
 		}
 	}
 
-	if err := service.AddRules(); err != nil {
-		//nolint:staticcheck // SA1019: suppress deprecated logger.Errorf usage. Todo: legacy logger usage is consistent in cns repo. Migrates when all logger usage is migrated
-		logger.Errorf("[Azure CNS] Failed to program ip rules: %v", err)
-		return types.UnexpectedError
-	}
-
 	return returnCode
 }
 
