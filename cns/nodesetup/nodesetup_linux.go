@@ -21,7 +21,7 @@ const (
 // listIPRules and addIPRule are package-level variables to allow test injection.
 var (
 	listIPRules = iprule.ListIPRules
-	addIPRule    = iprule.AddIPRule
+	addIPRule   = iprule.AddIPRule
 )
 
 // Run performs one-time node-level setup.

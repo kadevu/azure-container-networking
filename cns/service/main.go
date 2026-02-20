@@ -832,7 +832,7 @@ func main() {
 
 	if cnsconfig.RouteWireserverViaDefaultInterface {
 		if prepErr := nodesetup.New(cnsconfig, z).Run(); prepErr != nil {
-			logger.Errorf("[Azure CNS] Failed to setup node: %v", prepErr)
+			z.Error("failed to setup node", zap.Error(prepErr))
 			return
 		}
 	}
@@ -902,7 +902,6 @@ func main() {
 				logger.Errorf("Failed to set VF for accelnet NICs: %v", err)
 			}
 		}
-
 	}
 
 	// AzureHost channelmode indicates Nodesubnet. IPs are to be fetched from NMagent.

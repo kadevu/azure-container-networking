@@ -75,4 +75,3 @@ func (service *HTTPRestService) getPrimaryNICMACAddress() (string, error) {
 	}
 	return macAddress, nil
 }
-
