@@ -89,9 +89,6 @@ const (
 	// Enable CNS to program SNAT iptables rules
 	OptProgramSNATIPTables = "program-snat-iptables"
 
-	// Wireserver IP address
-	OptWireserverIP = "wireserver-ip"
-
 	// Enable Telemetry service
 	OptTelemetryService      = "telemetry-service"
 	OptTelemetryServiceAlias = "ts"

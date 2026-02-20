@@ -830,12 +830,9 @@ func main() {
 		return
 	}
 
-	// Program ip rules to route wireserver traffic through eth0 (infra NIC).
-	// This is a one-time node-level setup for scenarios like Prefix on NIC v6 with Cilium CNI.
 	if cnsconfig.RouteWireserverViaDefaultInterface {
-		if prepErr := nodesetup.Run(cnsconfig.WireserverIP); prepErr != nil {
-			//nolint:staticcheck // SA1019: suppress deprecated logger.Errorf usage. Todo: legacy logger usage is consistent in cns repo. Migrates when all logger usage is migrated
-			logger.Errorf("[Azure CNS] Failed to prepare node: %v", prepErr)
+		if prepErr := nodesetup.New(cnsconfig, z).Run(); prepErr != nil {
+			logger.Errorf("[Azure CNS] Failed to setup node: %v", prepErr)
 			return
 		}
 	}

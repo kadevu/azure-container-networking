@@ -5,6 +5,6 @@ package nodesetup
 
 // Run performs one-time node-level setup.
 // On Windows, no special node setup is currently required.
-func Run(_ string) error {
+func (nc *NodeConfiguration) Run() error {
 	return nil
 }
